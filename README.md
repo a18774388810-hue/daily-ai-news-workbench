@@ -7,6 +7,10 @@
 
 ![tech](https://img.shields.io/badge/React-19-149eca) ![tech](https://img.shields.io/badge/TypeScript-typed-3178c6) ![tech](https://img.shields.io/badge/Node-20+-339933) ![tech](https://img.shields.io/badge/license-MIT-blue)
 
+![工作台界面](./docs/screenshot-workbench.png)
+
+界面顶部右上角可以直接选择日期并生成当天要闻；左侧为板块与搜索筛选，中部为待审核的新闻列表，每条都可展开查看信源、纳入或排除、编辑内容。
+
 ---
 
 ## 目录
@@ -192,6 +196,9 @@ docker run -d -p 8787:8787 \
 │   └── report-validator.test.js 解析、去重、板块与 URL 校验、endpoint 安全
 │
 ├── scripts/dev.js              同时启动前后端的开发脚本
+│
+├── docs/
+│   └── screenshot-workbench.png  界面截图
 │
 ├── SKILL.md                    原始 Skill 规则：板块定义、评分标准、筛选原则
 ├── references/api_reference.md 板块分类与信源参考
