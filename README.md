@@ -1,112 +1,312 @@
-# Daily AI News Workbench
+# 每日 AI 要闻工作台
 
-可本机或 Node 服务器运行的 Vite + React + TypeScript 全栈应用。应用保留 `2026-10-01` 的 40 条历史示例，但不会虚构其他日期；用户可用自己的 OpenAI-compatible 模型生成、编辑、导出日报，并在飞书授权后选择自己的目标文档。
+> 把「每天刷 AI 新闻」变成一条可审核、可归档的流水线。
+> 固定 8 个板块，每板块 5 条，共 40 条——用你自己的模型 API Key 生成，逐条人工审核后导出。
 
-## 功能
+面向电商博主、企业内容与运营团队。它不是新闻聚合页，而是一个**带筛选规则和人工审核环节的日报生产工具**。
 
-- 多日报：按日期保存生成结果、编辑状态和发布状态，历史页可打开任一日报。
-- 历史种子：仅预置 `2026-10-01` 示例；空日期保持空状态。
-- 模型生成：`POST /api/generate` 验证八个固定板块、必填字段、HTTP(S) 来源 URL 并去重。目标为 8 板块各 5 条，不足 40 条会原样保留并返回 warnings。
-- 本地工作：未登录也可生成、编辑和导出 Markdown/JSON。
-- 飞书流程：OAuth 状态、登录、回调、目标文档选择和创建新文档流程已实现。
-- 安全限制：API Key 不写 localStorage、数据库或日志，不由服务端返回；仅随单次请求传给 Node 服务，并由 Node 转发至用户配置的 endpoint。
+![tech](https://img.shields.io/badge/React-19-149eca) ![tech](https://img.shields.io/badge/TypeScript-typed-3178c6) ![tech](https://img.shields.io/badge/Node-20+-339933) ![tech](https://img.shields.io/badge/license-MIT-blue)
 
-## 环境要求与运行
+---
 
-需要 Node.js 20 或更高版本（使用内置 `fetch`、测试运行器和 `--watch`）。
+## 目录
+
+- [它能做什么](#它能做什么)
+- [固定 8 个板块](#固定-8-个板块)
+- [快速开始](#快速开始)
+- [怎么用（4 步）](#怎么用4-步)
+- [部署到线上](#部署到线上)
+- [项目结构](#项目结构)
+- [环境变量](#环境变量)
+- [接口](#接口)
+- [常见问题](#常见问题)
+- [安全与隐私](#安全与隐私)
+- [已知限制](#已知限制)
+
+---
+
+## 它能做什么
+
+| 能力 | 说明 |
+|---|---|
+| 按日期生成日报 | 选择任意日期，调用你配置的模型生成当天要闻 |
+| 固定板块结构 | 强制 8 个板块、每板块 5 条，避免输出散乱 |
+| 信源校验 | 每条必须带可访问的 http(s) 来源链接，服务端会校验并清洗非法 URL |
+| 自动去重 | 同一事件只保留一条 |
+| 人工审核 | 逐条「纳入 / 排除」，可编辑标题、摘要、价值判断、实际意义 |
+| 审核进度 | 实时显示已纳入、已编辑、含二级信源的数量 |
+| 多日报归档 | 按日期保存，历史页可随时打开任一日期 |
+| 导出 | 一键导出 Markdown / JSON |
+| 飞书归档 | OAuth 授权后写入**你自己**的飞书文档（见[已知限制](#已知限制)） |
+| 本地持久化 | 所有编辑状态存在浏览器本地，不上传服务器 |
+
+**和普通 AI 摘要工具的区别**：生成只是中间产物。真正决定日报质量的是「人工审核」这一步——工具负责把 40 条候选摊开，你负责判断哪 35 条值得留下。
+
+---
+
+## 固定 8 个板块
+
+| # | 板块 | 关注什么 |
+|---|---|---|
+| 1 | 基础模型与多模态 | 模型发布、能力升级、降价、重要评测 |
+| 2 | 算力、开源与开发工具 | AI 芯片、云计算、开源模型、MCP、RAG、AI 编程 |
+| 3 | 大厂、产品与生态 | OpenAI / Google / Anthropic / 字节 / 阿里 / 腾讯等产品动作 |
+| 4 | AI 内容创作 | 图文视频音频、数字人、剪辑、配音、素材批量生产 |
+| 5 | 岗位提效与智能体 | Agent、工作流自动化、知识库、各岗位落地 |
+| 6 | AI 行业趋势 | 采用率、政策监管、资本、人才、产业格局 |
+| 7 | AI + 电商企业 | 平台、零售、广告投放、选品、客服、履约供应链 |
+| 8 | AI + 商业 | 商业模式、融资并购、各行业经营结果 |
+
+生成优先级：**先取最近 24 小时；某板块不足 5 条时，该板块扩展到最近 72 小时，并标注真实发布日期**。72 小时仍不足时如实保留缺口，不用传闻凑数。
+
+---
+
+## 快速开始
+
+### 环境要求
+
+- **Node.js 20 或更高**（依赖内置 `fetch`、`node:test`）
+
+### 本机运行
 
 ```bash
-git clone <本仓库地址>
-cd daily-ai-news-workbench-public
+git clone https://github.com/a18774388810-hue/daily-ai-news-workbench.git
+cd daily-ai-news-workbench
 npm install
 npm run dev
 ```
 
-`npm run dev` 同时启动 Node API（默认 `http://localhost:8787`）和 Vite。Vite 开发服务器会把 `/api` 代理到 Node；也可分别运行：
+打开 **http://localhost:8787** 即可。
+
+`npm run dev` 会同时启动 Node 接口服务和 Vite 开发服务器（Vite 把 `/api` 代理到 Node）。也可以分开跑：
 
 ```bash
-npm run dev:server
-npm run dev:client
+npm run dev:server   # 只跑接口
+npm run dev:client   # 只跑前端
 ```
 
-生产构建和本机启动：
+### 生产模式
 
 ```bash
-npm run build
-npm start
+npm run build   # 构建前端到 dist/
+npm start       # 启动 Node 服务并托管 dist/
 ```
 
-`npm start` 启动 Node 后端并托管 `dist/` 静态文件。通过 `PORT` 修改端口。
+改端口：`PORT=3000 npm start`
+
+### Docker
+
+```bash
+docker build -t ai-news-workbench .
+docker run -p 8787:8787 ai-news-workbench
+```
+
+---
+
+## 怎么用（4 步）
+
+**第 1 步：配置模型**
+
+进入左侧「设置」，填写：
+
+| 字段 | 说明 |
+|---|---|
+| Endpoint | OpenAI 兼容的 `chat/completions` 地址，例如 `https://api.openai.com/v1/chat/completions` |
+| Model | 模型名，例如 `gpt-4o`、`claude-sonnet-4`，或你所用中转平台的模型 ID |
+| API Key | **你自己的** Key，只存在当前页面内存 |
+| 联网搜索 | 若你的服务支持 `tools: [{type:"web_search"}]` 才勾选 |
+
+**第 2 步：生成**
+
+回到「日报工作台」→ 选日期 → 点「生成当天要闻」。
+
+生成按板块分成 8 次请求（并发 2 路），每个板块最长等待 120 秒，因此**整份日报通常需要几分钟**。期间不要刷新或关闭页面。某个板块失败不影响其他板块，会以警告形式提示。
+
+**第 3 步：审核**
+
+- 点标题左侧箭头展开，查看摘要、价值判断、对企业/博主的意义和原始信源
+- 「已纳入 / 已排除」逐条筛选
+- 点「编辑」修改标题和正文，改动自动保存
+- 顶部显示审核进度和二级信源提醒
+
+**第 4 步：导出或归档**
+
+- 「导出」→ 下载 Markdown 或 JSON
+- 「发布飞书」→ 授权后写入你自己的飞书文档（当前状态见[已知限制](#已知限制)）
+
+> 想先看效果？点顶部的「载入示例」，会加载内置的 `2026-10-01` 八板块 40 条真实日报——那是预置历史数据，不是实时生成。
+
+---
+
+## 部署到线上
+
+这个项目**不是纯静态站点**：生成接口、密钥转发和飞书 OAuth 都需要 Node 进程。所以：
+
+| 平台 | 是否可用 | 说明 |
+|---|---|---|
+| 本机 / VPS | ✅ | `npm run build && npm start`，前面挂 Nginx |
+| Docker（任意容器平台） | ✅ | 用仓库自带 `Dockerfile` |
+| Railway / Render / Fly.io / Zeabur | ✅ | 构建命令 `npm install && npm run build`，启动命令 `npm start` |
+| Vercel / Netlify | ⚠️ | 需把 `server/` 改写成 Serverless Function，当前代码不能直接跑 |
+| GitHub Pages / 对象存储 | ❌ | 纯静态托管，没有后端 |
+
+**Docker 部署示例**
+
+```bash
+docker build -t ai-news-workbench .
+docker run -d -p 8787:8787 \
+  -e PORT=8787 \
+  -e PUBLIC_BASE_URL=https://你的域名 \
+  ai-news-workbench
+```
+
+生产部署务必：
+
+1. 启用 **HTTPS**（API Key 会经过服务器）
+2. 在反向代理层加**请求频率限制**（当前代码未内置限流）
+3. 只运行**单个实例**（会话存内存，多实例会导致飞书授权状态丢失）
+
+---
+
+## 项目结构
+
+```text
+.
+├── src/                        前端（React + TypeScript）
+│   ├── App.tsx                 页面与全部交互逻辑
+│   ├── styles.css              样式
+│   ├── types.ts                类型定义
+│   └── data/
+│       ├── parser.ts           内置示例数据解析、8 板块常量
+│       └── report-2026-10-01.md  内置的 2026-10-01 示例日报（历史种子）
+│
+├── server/                     后端（Node 原生 http，无框架）
+│   ├── index.js                启动入口，读取 PORT
+│   ├── app.js                  路由 + 静态文件托管
+│   ├── generate.js             调用模型、按板块分批请求、endpoint 安全校验
+│   ├── report-validator.js     8 板块校验、字段校验、URL 白名单、去重
+│   └── feishu.js               飞书 OAuth 与文档写入适配
+│
+├── test/                       测试（node:test）
+│   ├── health.test.js          健康检查
+│   └── report-validator.test.js 解析、去重、板块与 URL 校验、endpoint 安全
+│
+├── scripts/dev.js              同时启动前后端的开发脚本
+│
+├── SKILL.md                    原始 Skill 规则：板块定义、评分标准、筛选原则
+├── references/api_reference.md 板块分类与信源参考
+│
+├── Dockerfile                  容器构建
+├── vite.config.ts              Vite 配置（含 /api 代理）
+└── README.md                   本文档
+```
+
+**两个目录的关系**：`SKILL.md` 是这套工具的「方法论」——它定义了每个板块收什么、什么新闻该排除、怎么评分。`src/` + `server/` 是「实现」。想改筛选标准，改 `SKILL.md` 和 `server/generate.js` 里的提示词即可。
+
+---
 
 ## 环境变量
 
-```text
-PORT=8787
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
-PUBLIC_BASE_URL=http://localhost:8787
-NODE_ENV=production
-```
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `PORT` | `8787` | 服务端口 |
+| `NODE_ENV` | — | 设为 `production` 后，endpoint 仅允许 HTTPS 且拦截私网地址 |
+| `FEISHU_APP_ID` | 空 | 飞书应用 App ID，不填则飞书登录按钮显示配置说明 |
+| `FEISHU_APP_SECRET` | 空 | 飞书应用 App Secret |
+| `PUBLIC_BASE_URL` | `http://localhost:8787` | 对外访问地址，用于拼接 OAuth 回调 |
 
-不要把 `.env`、API Key、Cookie、访问令牌或文档 token 提交到仓库。
+**模型 API Key 不是环境变量**，由每个用户在网页上填写，且不落盘。
 
-## 模型 API
+---
 
-设置页保存 endpoint、model 和可选联网工具开关；API Key 只存在当前 React 页面内存，刷新或关闭页面即清除。默认 endpoint 是 `https://api.openai.com/v1/chat/completions`，可以修改。非本机 endpoint 必须使用 HTTPS；本机 `localhost`、`127.0.0.1`、`::1` 可使用 HTTP。
+## 接口
 
-生成请求：
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET` | `/api/health` | 健康检查，返回 `{"ok":true}` |
+| `POST` | `/api/generate` | 生成日报，Key 通过请求头传入 |
+| `GET` | `/api/feishu/status` | 飞书配置与授权状态（不返回令牌） |
+| `GET` | `/api/feishu/login` | 发起飞书 OAuth |
+| `GET` | `/api/feishu/callback` | OAuth 回调，校验 state 并换取令牌 |
+| `POST` | `/api/feishu/publish` | 写入用户飞书文档 |
+
+**生成请求示例**
 
 ```http
 POST /api/generate
-x-user-api-key: <用户自己的 key>
 content-type: application/json
+x-user-api-key: <你自己的 key>
 
-{"date":"2026-10-03","endpoint":"https://api.openai.com/v1/chat/completions","model":"用户模型名","enableWebSearch":false}
+{
+  "date": "2026-10-03",
+  "endpoint": "https://api.openai.com/v1/chat/completions",
+  "model": "gpt-4o",
+  "enableWebSearch": false
+}
 ```
 
-服务端兼容常见 Chat Completions 响应 `choices[0].message.content`，要求内容为严格 JSON。启用 `enableWebSearch` 时会附加 `tools: [{"type":"web_search"}]`；这不是所有 OpenAI-compatible 服务都支持的通用字段，仅应在所用服务明确支持时启用。普通模型不一定能联网，协议要求无法检索时返回空 items；服务端不会用模型记忆或占位内容补足。
+服务端限制：请求体 ≤ 1 MB、上游响应 ≤ 2 MB、单板块上游超时 120 秒、endpoint 协议与私网校验、来源 URL 协议白名单、错误信息自动截断并清洗 Key。
 
-服务端限制包括：1 MB 入站请求、90 秒上游超时、2 MB 上游响应、endpoint 协议校验、来源 URL 协议白名单、错误信息截断和常见 Key 形式清洗。当前首版未实现限流，公网运行时应在反向代理层增加请求频率和并发限制。
+---
 
-## 数据与安全边界
+## 常见问题
 
-- 日报、编辑和发布标记存储在当前浏览器 `localStorage`，清理站点数据会丢失。
-- endpoint、model 和联网工具开关存储在 localStorage；API Key 不存储。
-- Key 从浏览器经当前 Node 服务转发到用户填写的第三方 endpoint。服务器运营者仍可在进程或网络层观察请求，因此仅应使用可信服务器、HTTPS 和可撤销的低权限 Key。
-- Node 代码不会记录请求 header、请求体或 Key，也不会把 Key写入响应。
-- 飞书 access token、refresh token 和目标文档 token 只保存在 Node 进程内存会话。服务重启、会话过期或多实例切换后会丢失；首版不适合无共享会话的多实例部署。
+**生成的新闻是空的，或者提示无法检索**
 
-## 飞书应用配置
+说明你的模型没有联网能力。工作台要求每条新闻都带**可验证的真实链接**，模型拿不到实时信息时会返回空结果，而不是编造新闻。解决办法：
 
-1. 在飞书开放平台创建应用，并启用用户身份 OAuth 与云文档相关权限。
-2. 在应用后台添加回调地址：`${PUBLIC_BASE_URL}/api/feishu/callback`。本机示例为 `http://localhost:8787/api/feishu/callback`。
-3. 配置 `FEISHU_APP_ID`、`FEISHU_APP_SECRET`、`PUBLIC_BASE_URL` 后重启服务。
-4. 设置页点击“登录飞书”。发布时首次必须选择“创建新文档”或提供用户自己的飞书 docx 文档 URL/token。
+1. 换一个支持联网搜索的模型；或
+2. 勾选「联网搜索」开关（仅当你所用服务支持 `web_search` 工具）；或
+3. 在服务端加一层独立的搜索服务，把检索结果喂给模型——这是更彻底的方案。
 
-OAuth 端点和字段集中在 `server/feishu.js`，按飞书开放平台通用 v2 OAuth 结构实现。由于本项目没有用户的真实飞书应用和授权环境，端点、权限范围、令牌字段及回调配置尚未进行端到端验证，必须按实际应用后台文档复核。
+**报错 `Web Search cannot be used with JSON mode`**
 
-当前正文写入不会伪装成功：OAuth、目标文档选择与创建文档请求已实现，但 docx block 顶部插入的最终 API 字段尚未在真实应用中验证，因此 `POST /api/feishu/publish` 会返回 `501 FEISHU_WRITE_ADAPTER_PENDING`。待验证后应只在 `server/feishu.js` 中补全写入适配；预期策略是在文档顶部插入当前日期内容，实现日期倒序。
+部分中转平台不允许 `web_search` 与 `response_format: json_object` 同时使用。本项目已处理：勾选联网搜索时自动关闭 JSON Mode，改由提示词要求 JSON、服务端再解析校验。
 
-## API
+**生成到一半失败 / 页面提示无法连接服务**
 
-- `GET /api/health`：健康检查。
-- `POST /api/generate`：使用请求 header 中的用户 Key 生成并校验日报。
-- `GET /api/feishu/status`：返回是否配置、是否授权及当前会话是否选择目标文档，不返回 OAuth token。
-- `GET /api/feishu/login`：发起飞书 OAuth。
-- `GET /api/feishu/callback`：校验随机 state 并交换用户 token。
-- `POST /api/feishu/publish`：检查授权和目标文档；正文适配未验证时明确返回 501。
+生成是 8 次分批请求，中途如果 Node 服务退出，浏览器会断连。确认 `npm start` 的进程仍在运行，且页面没有刷新。
 
-## 测试
+**能不能用中转平台（如各种 API 代理站）的 Key？**
 
-```bash
-npm test
-npm run build
-```
+可以，只要它兼容 OpenAI 的 `chat/completions` 协议。把 Endpoint 换成该平台的地址即可。注意**Key 和 Endpoint 必须属于同一平台**，用 A 平台的 Key 请求 B 平台的地址会失败。
 
-测试覆盖模型 JSON 响应解析、重复项移除、板块和 URL 校验，以及真实启动 Node 服务后的健康检查。
+**数据存在哪？换电脑会丢吗？**
 
-`SKILL.md` 与 `references/api_reference.md` 继续保留为原 WorkBuddy Skill 资料。项目不会依赖 `lark-cli` 或用户本机登录状态。
+日报、编辑状态、发布标记都存在**浏览器 localStorage**。清空站点数据或换浏览器会丢失。需要长期保存请用「导出」下载 Markdown/JSON。
+
+---
+
+## 安全与隐私
+
+**API Key 的处理**
+
+- 只在当前页面内存中保存，**不写 localStorage、不写数据库、不进服务端日志**
+- 刷新或关闭页面即清除
+- 随单次请求经服务端转发到你填写的 endpoint
+- **服务端的运营者仍可在网络层看到请求**——因此只应使用你自己信任的服务器、启用 HTTPS，并使用可随时撤销的低权限 Key
+
+**endpoint 安全**
+
+服务端会拦截指向本机、内网（`10.x`、`172.16-31.x`、`192.168.x`）和云元数据（`169.254.169.254`）的地址，避免被用作 SSRF 跳板。开发环境（未设 `NODE_ENV=production`）仅放行 `localhost` 的 HTTP 地址，便于连接本地模型服务（如 Ollama）。
+
+**飞书授权**
+
+access token、refresh token 和目标文档 token 只保存在 Node 进程内存会话中，服务重启即失效。本项目**不包含任何预置的私有文档地址或令牌**。
+
+---
+
+## 已知限制
+
+- **飞书正文写入尚未完成**：OAuth 登录、目标文档选择和新建文档流程已实现，但 docx 内容写入的最终 API 字段未在真实飞书应用中验证，`POST /api/feishu/publish` 会明确返回 `501 FEISHU_WRITE_ADAPTER_PENDING`，**不会伪装成功**。补全位置在 `server/feishu.js`。
+- **无账号体系**：所有数据存在访问者自己的浏览器里，不跨设备同步。
+- **无内置限流**：公网部署请在反向代理层加频率限制。
+- **单实例**：会话存内存，不适合多实例水平扩展。
+- **生成耗时长**：8 个板块分批请求，整份日报通常需要几分钟。
+- **示例数据只到 2026-10-01**：其余日期必须实际生成后才会出现在历史列表，不会用占位内容填充。
+
+---
 
 ## License
 
-MIT License，详见 `LICENSE`。
+MIT License，详见 [LICENSE](./LICENSE)。

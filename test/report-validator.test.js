@@ -26,8 +26,31 @@ test("移除非法板块和非 HTTP URL", () => {
   assert.equal(result.items[0].section, "基础模型与多模态");
 });
 
-test("生成 endpoint 拦截私网和云元数据地址", () => {
-  assert.throws(() => validateEndpoint("https://127.0.0.1/v1/chat/completions"), /私网|元数据/);
-  assert.throws(() => validateEndpoint("https://169.254.169.254/latest/meta-data"), /私网|元数据/);
-  assert.equal(validateEndpoint("https://api.openai.com/v1/chat/completions"), "https://api.openai.com/v1/chat/completions");
+test("生产环境拦截私网、本机和云元数据 endpoint", () => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  try {
+    assert.throws(() => validateEndpoint("https://127.0.0.1/v1/chat/completions"), /私网|元数据/);
+    assert.throws(() => validateEndpoint("https://169.254.169.254/latest/meta-data"), /私网|元数据/);
+    assert.throws(() => validateEndpoint("https://10.0.0.5/v1/chat/completions"), /私网|元数据/);
+    assert.throws(() => validateEndpoint("https://192.168.1.10/v1/chat/completions"), /私网|元数据/);
+    assert.throws(() => validateEndpoint("https://172.16.0.9/v1/chat/completions"), /私网|元数据/);
+    assert.throws(() => validateEndpoint("http://api.openai.com/v1/chat/completions"), /HTTPS/);
+    assert.equal(validateEndpoint("https://api.openai.com/v1/chat/completions"), "https://api.openai.com/v1/chat/completions");
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous;
+  }
+});
+
+test("开发环境仅放行本机地址的 HTTP endpoint", () => {
+  const previous = process.env.NODE_ENV;
+  delete process.env.NODE_ENV;
+  try {
+    assert.equal(validateEndpoint("http://localhost:11434/v1/chat/completions"), "http://localhost:11434/v1/chat/completions");
+    assert.equal(validateEndpoint("http://127.0.0.1:1234/v1/chat/completions"), "http://127.0.0.1:1234/v1/chat/completions");
+    assert.throws(() => validateEndpoint("http://192.168.1.10/v1/chat/completions"), /HTTPS/);
+    assert.throws(() => validateEndpoint("https://169.254.169.254/latest/meta-data"), /私网|元数据/);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous;
+  }
 });
