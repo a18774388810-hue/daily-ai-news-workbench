@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Archive, Check, ChevronDown, ChevronUp, CircleAlert, Copy, Download, ExternalLink, FileJson, FileText, Heart, History, LayoutDashboard, Menu, RefreshCw, Search, Settings, ShieldCheck, Sparkles, Trash2, X } from "lucide-react";
 import { createDemoState, sections } from "./data/parser";
 import type { ApiConfig, FeishuStatus, NewsItem, Page, ReportsState, ReportState } from "./types";
@@ -9,13 +9,29 @@ const DEFAULT_CONFIG: ApiConfig = { endpoint: "https://api.openai.com/v1/chat/co
 const stages = ["提交生成请求", "等待模型检索与整理", "校验来源和结构", "保存日报"];
 const today = new Date().toLocaleDateString("sv-SE");
 
-function loadReports(): ReportsState {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch { /* use seed */ }
+type SyncState = "loading" | "saving" | "synced" | "error" | "offline";
+const SYNC_LABEL: Record<SyncState, string> = {
+  loading: "正在读取日报…",
+  saving: "正在保存…",
+  synced: "日报已保存到服务器",
+  error: "保存失败，暂存在浏览器",
+  offline: "未连接服务，暂存在浏览器",
+};
+
+function seedReports(): ReportsState {
   const seed = createDemoState();
   return { reports: { [seed.date]: seed }, selectedDate: today };
+}
+// 浏览器本地缓存：只用于打开页面时立即回显，真实数据以服务端为准
+function loadLocalReports(): ReportsState | null {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return null;
+    const parsed = JSON.parse(saved);
+    return parsed && typeof parsed === "object" && parsed.reports ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 function loadConfig(): ApiConfig {
   try { return { ...DEFAULT_CONFIG, ...JSON.parse(localStorage.getItem(CONFIG_KEY) ?? "{}") }; }
@@ -46,7 +62,7 @@ async function apiJson(url: string, options?: RequestInit) {
 }
 
 export default function App() {
-  const [store, setStore] = useState<ReportsState>(loadReports);
+  const [store, setStore] = useState<ReportsState>(() => loadLocalReports() ?? seedReports());
   const [config, setConfig] = useState<ApiConfig>(loadConfig);
   const [apiKey, setApiKey] = useState("");
   const [feishu, setFeishu] = useState<FeishuStatus>({ configured: false, authenticated: false });
@@ -61,9 +77,50 @@ export default function App() {
   const [stage, setStage] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState("");
+  const [sync, setSync] = useState<SyncState>("loading");
+
+  const storeRef = useRef(store);
+  storeRef.current = store;
+  const hydrated = useRef(false);
 
   const report = store.reports[store.selectedDate];
-  useEffect(() => localStorage.setItem(STORAGE_KEY, JSON.stringify(store)), [store]);
+
+  // 启动时以服务端数据为准；服务端为空则把本地缓存推上去
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const remote = await apiJson("/api/state");
+        if (cancelled) return;
+        const remoteReports = (remote?.reports ?? {}) as ReportsState["reports"];
+        if (Object.keys(remoteReports).length > 0) {
+          setStore({ reports: remoteReports, selectedDate: remote?.selectedDate ?? storeRef.current.selectedDate });
+        } else {
+          await apiJson("/api/state", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(storeRef.current) });
+        }
+        if (!cancelled) setSync("synced");
+      } catch {
+        if (!cancelled) setSync("offline");
+      } finally {
+        hydrated.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 任何改动：先落本地缓存，再防抖写服务端
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(store)); } catch { /* 本地缓存写不进去不影响服务端保存 */ }
+    if (!hydrated.current) return;
+    setSync("saving");
+    const timer = window.setTimeout(() => {
+      apiJson("/api/state", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(store) })
+        .then(() => setSync("synced"))
+        .catch(() => setSync("error"));
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [store]);
+
   useEffect(() => localStorage.setItem(CONFIG_KEY, JSON.stringify(config)), [config]);
   useEffect(() => { apiJson("/api/feishu/status").then(setFeishu).catch(() => undefined); }, []);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(""), 3500); return () => clearTimeout(timer); }, [toast]);
@@ -93,7 +150,7 @@ export default function App() {
       <NavButton icon={<History />} label="历史日报" active={page === "history"} onClick={() => navigate("history")} />
       <NavButton icon={<Archive />} label="选题库" active={page === "topics"} onClick={() => navigate("topics")} />
       <NavButton icon={<Settings />} label="设置" active={page === "settings"} onClick={() => navigate("settings")} />
-    </nav><div className="sidebar-status"><span className="status-dot" />本地多日报已保存<small>API Key 不持久化</small></div></aside>
+    </nav><div className="sidebar-status"><span className={`status-dot ${sync === "error" || sync === "offline" ? "warn" : ""}`} />{SYNC_LABEL[sync]}<small>日报存服务端 · API Key 不持久化</small></div></aside>
     {sidebarOpen && <button className="scrim" aria-label="关闭导航" onClick={() => setSidebarOpen(false)} />}
     <main><header className="mobile-header"><button className="icon-button" onClick={() => setSidebarOpen(true)} aria-label="打开导航"><Menu /></button><strong>每日 AI 要闻</strong></header>
       {page === "today" && <TodayPage report={report} date={store.selectedDate} setDate={selectDate} filtered={filtered} section={section} setSection={setSection} query={query} setQuery={setQuery} expanded={expanded} setExpanded={setExpanded} setEditing={setEditing} updateItem={updateItem} generate={generate} generating={generating} stage={stage} loadExample={() => { selectDate("2026-10-01"); setToast("已打开 2026-10-01 历史示例"); }} setExportOpen={setExportOpen} setPublishOpen={setPublishOpen} />}

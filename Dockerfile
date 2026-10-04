@@ -13,11 +13,15 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=8787
+ENV DATA_DIR=/app/data
 
 # package.json 必须保留：其中 "type": "module" 决定 server/*.js 以 ESM 解析
 COPY package.json ./
 COPY --from=build /app/dist ./dist
 COPY server ./server
+
+# 日报数据目录：运行时建议挂卷，否则容器重建会丢
+VOLUME ["/app/data"]
 
 EXPOSE 8787
 CMD ["node", "server/index.js"]
