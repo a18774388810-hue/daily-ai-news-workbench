@@ -71,7 +71,22 @@
 
 - **Node.js 20 或更高**（依赖内置 `fetch`、`node:test`）
 
-### 本机运行
+### 最简方式：一键启动（推荐给非技术用户）
+
+下载仓库后，双击对应文件：
+
+| 系统 | 文件 |
+|---|---|
+| macOS | `start-workbench.command` |
+| Windows | `start-workbench.bat` |
+
+脚本会自动完成：检查 Node 版本 → 安装依赖 → 构建前端 → 启动服务 → 打开浏览器。
+
+> **macOS 首次双击**可能提示「无法验证开发者」，在文件上**右键 → 打开**，再确认一次即可。
+> 两个脚本都会先检测 Node.js，没装会提示到 [nodejs.org](https://nodejs.org/) 下载。
+> Windows 用户需要已安装 Node.js；脚本本身不需要额外配置。
+
+### 本机运行（手动方式）
 
 ```bash
 git clone https://github.com/a18774388810-hue/daily-ai-news-workbench.git
@@ -80,9 +95,14 @@ npm install
 npm run dev
 ```
 
-打开 **http://localhost:8787** 即可。
+打开 **http://localhost:5173** 即可（开发模式访问 5173，不是 8787）。
 
-`npm run dev` 会同时启动 Node 接口服务和 Vite 开发服务器（Vite 把 `/api` 代理到 Node）。也可以分开跑：
+`npm run dev` 会同时启动：
+
+- Node 接口服务：`http://localhost:8787`
+- Vite 开发服务器：`http://localhost:5173` ← **浏览器访问这个**
+
+Vite 会把 `/api` 请求代理到 Node。也可以分开跑：
 
 ```bash
 npm run dev:server   # 只跑接口
@@ -95,6 +115,10 @@ npm run dev:client   # 只跑前端
 npm run build   # 构建前端到 dist/
 npm start       # 启动 Node 服务并托管 dist/
 ```
+
+打开 **http://localhost:8787**。
+
+生产模式由 Node 同时提供接口和前端页面，只有一个端口；开发模式是前后端分开两个端口。
 
 改端口：`PORT=3000 npm start`
 
@@ -197,6 +221,9 @@ docker run -d -p 8787:8787 \
 │
 ├── scripts/dev.js              同时启动前后端的开发脚本
 │
+├── start-workbench.command     一键启动（macOS / Linux）
+├── start-workbench.bat         一键启动（Windows）
+│
 ├── docs/
 │   └── screenshot-workbench.png  界面截图
 │
@@ -257,6 +284,22 @@ x-user-api-key: <你自己的 key>
 ---
 
 ## 常见问题
+
+**下载源码后，能不能不装 Node 直接用？**
+
+不能。这是一个前后端一体的应用：前端负责界面，后端负责调用模型、校验信源和转发你的 Key。后端必须跑在一个 Node 进程里，所以本机运行需要安装 Node.js 20+。
+
+如果你只想「打开网页就能用」，需要把它部署到支持 Node 的服务器（见[部署到线上](#部署到线上)），或者使用别人已经部署好的地址。
+
+**需要在哪几个地方填东西？**
+
+不是只填 API Key。设置页有**三项**：
+
+1. **Endpoint** —— OpenAI 兼容的接口地址
+2. **Model** —— 模型名
+3. **API Key** —— 你自己的 Key
+
+三项必须属于**同一个服务商**。拿 A 平台的 Key 去请求 B 平台的地址一定失败。
 
 **生成的新闻是空的，或者提示无法检索**
 

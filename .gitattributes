@@ -1,0 +1,5 @@
+# Windows 批处理必须使用 CRLF，否则部分环境下无法正常执行
+*.bat text eol=crlf
+# Unix 脚本使用 LF，并保留可执行位
+*.command text eol=lf
+*.sh text eol=lf
