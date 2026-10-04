@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.env.*
+*.log
+*.sqlite
+*.db
+*.pyc
+__pycache__/
+node_modules/
+dist/
+cache/
+output/
+outputs/
+secrets/
+credentials*
+*.tsbuildinfo
+.DS_Store
